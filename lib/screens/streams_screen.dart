@@ -5,7 +5,9 @@ import '../models/live_category.dart';
 import '../models/live_stream.dart';
 import '../providers/auth_provider.dart';
 import '../providers/streams_provider.dart';
+import '../utils/layout_utils.dart';
 import '../widgets/channel_tile.dart';
+import '../widgets/inline_player.dart';
 import 'player_screen.dart';
 
 class StreamsScreen extends StatefulWidget {
@@ -20,6 +22,7 @@ class StreamsScreen extends StatefulWidget {
 class _StreamsScreenState extends State<StreamsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  LiveStream? _selectedStream;
 
   @override
   void initState() {
@@ -49,10 +52,27 @@ class _StreamsScreenState extends State<StreamsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.read<AuthProvider>();
+    final useSplit = isMobilePortrait(context);
+    final playerUrl = _selectedStream != null && auth.serverUrl != null && auth.username != null && auth.password != null
+        ? _selectedStream!.buildStreamUrl(auth.serverUrl!, auth.username!, auth.password!)
+        : null;
+
     return Scaffold(
       appBar: AppBar(title: Text(widget.category.categoryName)),
       body: Column(
         children: [
+          if (useSplit)
+            SizedBox(
+              height: MediaQuery.sizeOf(context).height * 0.30,
+              child: ColoredBox(
+                color: Colors.black,
+                child: InlinePlayerWidget(
+                  streamUrl: playerUrl,
+                  title: _selectedStream?.name ?? widget.category.categoryName,
+                ),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: TextField(
@@ -106,6 +126,13 @@ class _StreamsScreenState extends State<StreamsScreen> {
                     ),
                   );
                 }
+                if (useSplit && _selectedStream == null && filtered.isNotEmpty) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted && _selectedStream == null) {
+                      setState(() => _selectedStream = filtered.first);
+                    }
+                  });
+                }
                 return RefreshIndicator(
                   onRefresh: _loadStreams,
                   child: ListView.builder(
@@ -114,11 +141,13 @@ class _StreamsScreenState extends State<StreamsScreen> {
                     itemBuilder: (context, index) {
                       final stream = filtered[index];
                       return ChannelTile(
-                  stream: stream,
-                  serverUrl: context.read<AuthProvider>().serverUrl!,
-                  username: context.read<AuthProvider>().username!,
-                  password: context.read<AuthProvider>().password!,
-                        onTap: () => _openPlayer(context, stream),
+                        stream: stream,
+                        serverUrl: auth.serverUrl!,
+                        username: auth.username!,
+                        password: auth.password!,
+                        onTap: () => useSplit
+                            ? setState(() => _selectedStream = stream)
+                            : _openPlayer(context, stream),
                       );
                     },
                   ),

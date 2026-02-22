@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 
+import '../widgets/player_controls_overlay.dart';
+
 class PlayerScreen extends StatefulWidget {
   final String streamUrl;
   final String channelName;
@@ -141,11 +143,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
               backgroundColor: Colors.black,
               foregroundColor: Colors.white,
               actions: [
-                IconButton(
-                  icon: const Icon(Icons.fullscreen),
-                  onPressed: _toggleFullscreen,
-                  tooltip: 'Fullscreen',
-                ),
+                if (_videoController != null)
+                  PlayerControlsOverlay(
+                    controller: _videoController!,
+                    onFullscreen: _toggleFullscreen,
+                    isFullscreen: false,
+                    compact: true,
+                  ),
               ],
             ),
       backgroundColor: Colors.black,
@@ -187,18 +191,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 child: Chewie(controller: _chewieController!),
               ),
             ),
-          if (_isFullscreen)
+          if (_isFullscreen && _videoController != null)
             Positioned(
-              top: MediaQuery.of(context).padding.top + 8,
+              bottom: MediaQuery.of(context).padding.bottom + 16,
+              left: 16,
               right: 16,
-              child: Material(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(8),
-                child: IconButton(
-                  icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
-                  onPressed: _toggleFullscreen,
-                  tooltip: 'Exit fullscreen',
-                ),
+              child: PlayerControlsOverlay(
+                controller: _videoController!,
+                onFullscreen: _toggleFullscreen,
+                isFullscreen: true,
+                compact: false,
               ),
             ),
         ],

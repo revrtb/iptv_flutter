@@ -5,6 +5,8 @@ import '../models/live_category.dart';
 import '../models/vod_item.dart';
 import '../providers/auth_provider.dart';
 import '../providers/vod_provider.dart';
+import '../utils/layout_utils.dart';
+import '../widgets/inline_player.dart';
 import '../widgets/vod_tile.dart';
 import 'player_screen.dart';
 
@@ -20,6 +22,7 @@ class VodListScreen extends StatefulWidget {
 class _VodListScreenState extends State<VodListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  VodItem? _selectedItem;
 
   @override
   void initState() {
@@ -47,10 +50,27 @@ class _VodListScreenState extends State<VodListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.read<AuthProvider>();
+    final useSplit = isMobilePortrait(context);
+    final playerUrl = _selectedItem != null && auth.serverUrl != null && auth.username != null && auth.password != null
+        ? _selectedItem!.buildStreamUrl(auth.serverUrl!, auth.username!, auth.password!)
+        : null;
+
     return Scaffold(
       appBar: AppBar(title: Text(widget.category.categoryName)),
       body: Column(
         children: [
+          if (useSplit)
+            SizedBox(
+              height: MediaQuery.sizeOf(context).height * 0.30,
+              child: ColoredBox(
+                color: Colors.black,
+                child: InlinePlayerWidget(
+                  streamUrl: playerUrl,
+                  title: _selectedItem?.name ?? widget.category.categoryName,
+                ),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: TextField(
@@ -97,6 +117,13 @@ class _VodListScreenState extends State<VodListScreen> {
                     child: Text(prov.items.isEmpty ? 'No movies in this category' : 'No movies match "$_searchQuery"'),
                   );
                 }
+                if (useSplit && _selectedItem == null && filtered.isNotEmpty) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted && _selectedItem == null) {
+                      setState(() => _selectedItem = filtered.first);
+                    }
+                  });
+                }
                 return RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.builder(
@@ -104,14 +131,15 @@ class _VodListScreenState extends State<VodListScreen> {
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final item = filtered[index];
-                final auth = context.read<AuthProvider>();
-                return VodTile(
-                  item: item,
-                  serverUrl: auth.serverUrl!,
-                  username: auth.username!,
-                  password: auth.password!,
-                  onTap: () => _openPlayer(context, item),
-                );
+                      return VodTile(
+                        item: item,
+                        serverUrl: auth.serverUrl!,
+                        username: auth.username!,
+                        password: auth.password!,
+                        onTap: () => useSplit
+                            ? setState(() => _selectedItem = item)
+                            : _openPlayer(context, item),
+                      );
                     },
                   ),
                 );
