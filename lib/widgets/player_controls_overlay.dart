@@ -1,13 +1,10 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:screen_brightness/screen_brightness.dart';
 import 'package:video_player/video_player.dart';
 
-/// Overlay with volume, brightness, speed, seek ±10s, PiP (when supported).
+/// Overlay with play/pause, volume, speed, seek ±10s.
 class PlayerControlsOverlay extends StatefulWidget {
   final VideoPlayerController controller;
   final VoidCallback? onFullscreen;
-  final VoidCallback? onPiP;
   final bool isFullscreen;
   final bool compact;
 
@@ -15,7 +12,6 @@ class PlayerControlsOverlay extends StatefulWidget {
     super.key,
     required this.controller,
     this.onFullscreen,
-    this.onPiP,
     this.isFullscreen = false,
     this.compact = false,
   });
@@ -27,41 +23,30 @@ class PlayerControlsOverlay extends StatefulWidget {
 class _PlayerControlsOverlayState extends State<PlayerControlsOverlay> {
   static const List<double> _speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
   double _volume = 1.0;
-  double _brightness = 0.5;
-  bool _brightnessLoaded = false;
-  bool _pipSupported = false;
 
   @override
   void initState() {
     super.initState();
     _volume = widget.controller.value.volume;
-    _checkBrightness();
-    _checkPipSupport();
+    widget.controller.addListener(_onControllerUpdate);
   }
 
-  Future<void> _checkBrightness() async {
-    try {
-      final b = await ScreenBrightness().application;
-      if (mounted) setState(() { _brightness = b; _brightnessLoaded = true; });
-    } catch (_) {
-      if (mounted) setState(() => _brightnessLoaded = true);
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onControllerUpdate);
+    super.dispose();
+  }
+
+  void _onControllerUpdate() {
+    if (mounted) setState(() {});
+  }
+
+  void _togglePlayPause() {
+    if (widget.controller.value.isPlaying) {
+      widget.controller.pause();
+    } else {
+      widget.controller.play();
     }
-  }
-
-  Future<void> _checkPipSupport() async {
-    if (kIsWeb) {
-      setState(() => _pipSupported = false);
-      return;
-    }
-    // PiP supported on Android 8+ / iOS 14+; button still shown for user to try device PiP
-    setState(() => _pipSupported = true);
-  }
-
-  Future<void> _setBrightness(double value) async {
-    setState(() => _brightness = value.clamp(0.0, 1.0));
-    try {
-      await ScreenBrightness().setApplicationScreenBrightness(_brightness);
-    } catch (_) {}
   }
 
   void _seekRelative(Duration delta) {
@@ -118,48 +103,6 @@ class _PlayerControlsOverlayState extends State<PlayerControlsOverlay> {
     );
   }
 
-  void _showBrightnessSheet() {
-    if (!_brightnessLoaded) _checkBrightness();
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) {
-          return Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.black87,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.brightness_6, color: Colors.white),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Slider(
-                          value: _brightness,
-                          onChanged: (v) {
-                            setModalState(() => _brightness = v);
-                            _setBrightness(v);
-                          },
-                          activeColor: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   void _showSpeedSheet() {
     showModalBottomSheet<void>(
       context: context,
@@ -208,7 +151,13 @@ class _PlayerControlsOverlayState extends State<PlayerControlsOverlay> {
 
   @override
   Widget build(BuildContext context) {
+    final isPlaying = widget.controller.value.isPlaying;
     final children = <Widget>[
+      IconButton(
+        icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 32),
+        onPressed: _togglePlayPause,
+        tooltip: isPlaying ? 'Pause' : 'Play',
+      ),
       IconButton(
         icon: const Icon(Icons.replay_10, color: Colors.white),
         onPressed: () => _seekRelative(const Duration(seconds: -10)),
@@ -229,19 +178,6 @@ class _PlayerControlsOverlayState extends State<PlayerControlsOverlay> {
         onPressed: _showVolumeSheet,
         tooltip: 'Volume',
       ),
-      IconButton(
-        icon: const Icon(Icons.brightness_6, color: Colors.white),
-        onPressed: _showBrightnessSheet,
-        tooltip: 'Brightness',
-      ),
-      if (widget.onPiP != null || _pipSupported)
-        IconButton(
-          icon: const Icon(Icons.picture_in_picture_alt, color: Colors.white),
-          onPressed: widget.onPiP ?? () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('PiP: use device PiP from recent apps (Android 8+ / iOS 14+)')),
-          ),
-          tooltip: 'Picture-in-Picture',
-        ),
       if (widget.onFullscreen != null)
         IconButton(
           icon: Icon(

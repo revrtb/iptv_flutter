@@ -7,6 +7,7 @@ import 'providers/categories_provider.dart';
 import 'providers/streams_provider.dart';
 import 'providers/vod_provider.dart';
 import 'providers/series_provider.dart';
+import 'providers/tmdb_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 
@@ -34,6 +35,7 @@ class IptvApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => StreamsProvider()),
         ChangeNotifierProvider(create: (_) => VodProvider()),
         ChangeNotifierProvider(create: (_) => SeriesProvider()),
+        ChangeNotifierProvider(create: (_) => TmdbProvider()),
       ],
       child: MaterialApp(
         title: 'IPTV Player',

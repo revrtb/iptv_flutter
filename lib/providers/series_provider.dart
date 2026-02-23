@@ -111,11 +111,12 @@ class SeriesProvider extends ChangeNotifier {
   }) async {
     _errorMessage = null;
     _currentCategoryId = categoryId;
+    final isAll = categoryId == null || categoryId.trim().isEmpty;
     if (_allSeries.isNotEmpty) {
-      if (categoryId == null || categoryId.isEmpty) {
+      if (isAll) {
         _series = List.from(_allSeries);
       } else {
-        final id = categoryId.trim();
+        final id = categoryId!.trim();
         _series = _allSeries
             .where((s) =>
                 s.categoryId.trim() == id || s.categoryIdsForCount.contains(id))
@@ -131,7 +132,7 @@ class SeriesProvider extends ChangeNotifier {
         serverUrl: serverUrl,
         username: username,
         password: password,
-        categoryId: categoryId,
+        categoryId: isAll ? null : categoryId,
       );
     } catch (e) {
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
@@ -140,5 +141,41 @@ class SeriesProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Ensure all series are loaded (for search). Idempotent.
+  Future<void> ensureAllSeriesLoaded({
+    required String serverUrl,
+    required String username,
+    required String password,
+  }) async {
+    if (_allSeries.isNotEmpty) return;
+    try {
+      final all = await _api.getSeries(
+        serverUrl: serverUrl,
+        username: username,
+        password: password,
+        categoryId: null,
+      );
+      _allSeries = all;
+      _categoryCounts.clear();
+      for (final s in all) {
+        for (final id in s.categoryIdsForCount) {
+          if (id.isNotEmpty) _categoryCounts[id] = (_categoryCounts[id] ?? 0) + 1;
+        }
+      }
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Find first series whose name matches [title] (case-insensitive contains or equals).
+  SeriesItem? findSeriesByTitle(String title) {
+    final q = title.trim().toLowerCase();
+    if (q.isEmpty) return null;
+    for (final s in _allSeries) {
+      final n = s.name.trim().toLowerCase();
+      if (n.contains(q) || q.contains(n)) return s;
+    }
+    return null;
   }
 }

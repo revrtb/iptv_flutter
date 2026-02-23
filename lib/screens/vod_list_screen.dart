@@ -12,21 +12,29 @@ import 'player_screen.dart';
 
 class VodListScreen extends StatefulWidget {
   final LiveCategory category;
+  /// Pre-fill search field (e.g. from "Check Availability").
+  final String? initialSearchQuery;
 
-  const VodListScreen({super.key, required this.category});
+  const VodListScreen({
+    super.key,
+    required this.category,
+    this.initialSearchQuery,
+  });
 
   @override
   State<VodListScreen> createState() => _VodListScreenState();
 }
 
 class _VodListScreenState extends State<VodListScreen> {
-  final TextEditingController _searchController = TextEditingController();
+  late final TextEditingController _searchController;
   String _searchQuery = '';
   VodItem? _selectedItem;
 
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController(text: widget.initialSearchQuery ?? '');
+    _searchQuery = (widget.initialSearchQuery ?? '').trim().toLowerCase();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     _searchController.addListener(() => setState(() => _searchQuery = _searchController.text.trim().toLowerCase()));
   }
@@ -40,11 +48,14 @@ class _VodListScreenState extends State<VodListScreen> {
   Future<void> _load() async {
     final auth = context.read<AuthProvider>();
     if (auth.serverUrl == null || auth.username == null || auth.password == null) return;
+    final categoryId = widget.category.categoryId.trim().isEmpty
+        ? null
+        : widget.category.categoryId;
     await context.read<VodProvider>().loadStreams(
           serverUrl: auth.serverUrl!,
           username: auth.username!,
           password: auth.password!,
-          categoryId: widget.category.categoryId,
+          categoryId: categoryId,
         );
   }
 

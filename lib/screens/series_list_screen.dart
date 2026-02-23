@@ -10,20 +10,28 @@ import 'series_detail_screen.dart';
 
 class SeriesListScreen extends StatefulWidget {
   final LiveCategory category;
+  /// Pre-fill search field (e.g. from "Check Availability").
+  final String? initialSearchQuery;
 
-  const SeriesListScreen({super.key, required this.category});
+  const SeriesListScreen({
+    super.key,
+    required this.category,
+    this.initialSearchQuery,
+  });
 
   @override
   State<SeriesListScreen> createState() => _SeriesListScreenState();
 }
 
 class _SeriesListScreenState extends State<SeriesListScreen> {
-  final TextEditingController _searchController = TextEditingController();
+  late final TextEditingController _searchController;
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController(text: widget.initialSearchQuery ?? '');
+    _searchQuery = (widget.initialSearchQuery ?? '').trim().toLowerCase();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     _searchController.addListener(() => setState(() => _searchQuery = _searchController.text.trim().toLowerCase()));
   }
@@ -37,11 +45,14 @@ class _SeriesListScreenState extends State<SeriesListScreen> {
   Future<void> _load() async {
     final auth = context.read<AuthProvider>();
     if (auth.serverUrl == null || auth.username == null || auth.password == null) return;
+    final categoryId = widget.category.categoryId.trim().isEmpty
+        ? null
+        : widget.category.categoryId;
     await context.read<SeriesProvider>().loadSeries(
           serverUrl: auth.serverUrl!,
           username: auth.username!,
           password: auth.password!,
-          categoryId: widget.category.categoryId,
+          categoryId: categoryId,
         );
   }
 

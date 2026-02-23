@@ -111,11 +111,12 @@ class VodProvider extends ChangeNotifier {
   }) async {
     _errorMessage = null;
     _currentCategoryId = categoryId;
+    final isAll = categoryId == null || categoryId.trim().isEmpty;
     if (_allItems.isNotEmpty) {
-      if (categoryId == null || categoryId.isEmpty) {
+      if (isAll) {
         _items = List.from(_allItems);
       } else {
-        final id = categoryId.trim();
+        final id = categoryId!.trim();
         _items = _allItems
             .where((v) =>
                 v.categoryId.trim() == id || v.categoryIdsForCount.contains(id))
@@ -131,7 +132,7 @@ class VodProvider extends ChangeNotifier {
         serverUrl: serverUrl,
         username: username,
         password: password,
-        categoryId: categoryId,
+        categoryId: isAll ? null : categoryId,
       );
     } catch (e) {
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
@@ -140,5 +141,41 @@ class VodProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Ensure all VOD items are loaded (for search). Idempotent.
+  Future<void> ensureAllVodLoaded({
+    required String serverUrl,
+    required String username,
+    required String password,
+  }) async {
+    if (_allItems.isNotEmpty) return;
+    try {
+      final all = await _api.getVodStreams(
+        serverUrl: serverUrl,
+        username: username,
+        password: password,
+        categoryId: null,
+      );
+      _allItems = all;
+      _categoryCounts.clear();
+      for (final v in all) {
+        for (final id in v.categoryIdsForCount) {
+          if (id.isNotEmpty) _categoryCounts[id] = (_categoryCounts[id] ?? 0) + 1;
+        }
+      }
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Find first VOD whose name matches [title] (case-insensitive contains or equals).
+  VodItem? findVodByTitle(String title) {
+    final q = title.trim().toLowerCase();
+    if (q.isEmpty) return null;
+    for (final v in _allItems) {
+      final n = v.name.trim().toLowerCase();
+      if (n.contains(q) || q.contains(n)) return v;
+    }
+    return null;
   }
 }

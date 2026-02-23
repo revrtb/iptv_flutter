@@ -18,6 +18,8 @@ dependencies:
   chewie: ^1.7.4
   fvp: ^0.35.2
   screen_brightness: ^2.1.7
+  tmdb_api: ^2.2.3
+  url_launcher: ^6.2.5
 
 dev_dependencies:
   flutter_test:
