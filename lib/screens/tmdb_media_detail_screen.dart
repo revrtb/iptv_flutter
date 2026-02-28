@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -8,6 +9,7 @@ import '../providers/series_provider.dart';
 import '../providers/tmdb_provider.dart';
 import '../providers/vod_provider.dart';
 import '../services/tmdb_service.dart';
+import '../widgets/streaming/streaming_app_bar.dart';
 import 'series_list_screen.dart';
 import 'vod_list_screen.dart';
 
@@ -38,14 +40,32 @@ class _TmdbMediaDetailScreenState extends State<TmdbMediaDetailScreen>
   List<Map<String, dynamic>> _videos = [];
   List<Map<String, dynamic>> _cast = [];
   bool _loading = true;
-  String? _error;
   bool _checkingAvailability = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    // Preload playlist in background so "Check Availability" is fast
+    WidgetsBinding.instance.addPostFrameCallback((_) => _preloadPlaylist());
+  }
+
+  void _preloadPlaylist() {
+    final auth = context.read<AuthProvider>();
+    if (auth.serverUrl == null || auth.username == null || auth.password == null) return;
+    // Preload both so either Movies or Series "Check Availability" is fast
+    context.read<VodProvider>().ensureAllVodLoaded(
+      serverUrl: auth.serverUrl!,
+      username: auth.username!,
+      password: auth.password!,
+    );
+    context.read<SeriesProvider>().ensureAllSeriesLoaded(
+      serverUrl: auth.serverUrl!,
+      username: auth.username!,
+      password: auth.password!,
+    );
   }
 
   @override
@@ -146,34 +166,44 @@ class _TmdbMediaDetailScreenState extends State<TmdbMediaDetailScreen>
   Future<void> _checkAvailability() async {
     final auth = context.read<AuthProvider>();
     if (auth.serverUrl == null || auth.username == null || auth.password == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Not logged in')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Not logged in')),
+      );
       return;
     }
+    if (_checkingAvailability) return;
     setState(() => _checkingAvailability = true);
-    final vod = context.read<VodProvider>();
-    final series = context.read<SeriesProvider>();
-    if (widget.isMovie) {
-      await vod.ensureAllVodLoaded(
-        serverUrl: auth.serverUrl!,
-        username: auth.username!,
-        password: auth.password!,
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Loading catalog...'), duration: Duration(seconds: 2)),
       );
-    } else {
-      await series.ensureAllSeriesLoaded(
-        serverUrl: auth.serverUrl!,
-        username: auth.username!,
-        password: auth.password!,
-      );
+    }
+    try {
+      if (widget.isMovie) {
+        await context.read<VodProvider>().ensureAllVodLoaded(
+          serverUrl: auth.serverUrl!,
+          username: auth.username!,
+          password: auth.password!,
+        );
+      } else {
+        await context.read<SeriesProvider>().ensureAllSeriesLoaded(
+          serverUrl: auth.serverUrl!,
+          username: auth.username!,
+          password: auth.password!,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load catalog. Pull to refresh on the next screen.')),
+        );
+      }
     }
     if (!mounted) return;
     setState(() => _checkingAvailability = false);
     final searchTitle = _name;
     if (widget.isMovie) {
-      Navigator.pushReplacement(
+      Navigator.push(
         context,
         MaterialPageRoute<void>(
           builder: (context) => VodListScreen(
@@ -183,7 +213,7 @@ class _TmdbMediaDetailScreenState extends State<TmdbMediaDetailScreen>
         ),
       );
     } else {
-      Navigator.pushReplacement(
+      Navigator.push(
         context,
         MaterialPageRoute<void>(
           builder: (context) => SeriesListScreen(
@@ -199,20 +229,21 @@ class _TmdbMediaDetailScreenState extends State<TmdbMediaDetailScreen>
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: Text(widget.title)),
+        appBar: StreamingAppBar(title: widget.title),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: Text(widget.title)),
+        appBar: StreamingAppBar(title: widget.title),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(_error!, textAlign: TextAlign.center),
+                Text(_error!, textAlign: TextAlign.center,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error)),
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: _load,
@@ -226,21 +257,32 @@ class _TmdbMediaDetailScreenState extends State<TmdbMediaDetailScreen>
     }
 
     final backdropUrl = TmdbService.backdropUrl(_backdropPath);
+    final theme = Theme.of(context);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) Navigator.of(context).pop();
+      },
+      child: Scaffold(
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             expandedHeight: 200,
             pinned: true,
+            backgroundColor: theme.colorScheme.surface,
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
             flexibleSpace: FlexibleSpaceBar(
               background: backdropUrl.isNotEmpty
                   ? Image.network(
                       backdropUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(color: Colors.grey[900]),
+                      errorBuilder: (_, __, ___) => Container(color: theme.colorScheme.surfaceContainerHighest),
                     )
-                  : Container(color: Colors.grey[900]),
+                  : Container(color: theme.colorScheme.surfaceContainerHighest),
             ),
           ),
           SliverToBoxAdapter(
@@ -285,9 +327,7 @@ class _TmdbMediaDetailScreenState extends State<TmdbMediaDetailScreen>
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.search),
-                      label: Text(_checkingAvailability
-                          ? 'Searching...'
-                          : 'Check Availability'),
+                      label: Text(_checkingAvailability ? 'Loading catalog...' : 'Check Availability'),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -313,6 +353,7 @@ class _TmdbMediaDetailScreenState extends State<TmdbMediaDetailScreen>
           ),
         ],
       ),
+    ),
     );
   }
 }
@@ -324,8 +365,10 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Chip(
-      label: Text(text, style: const TextStyle(fontSize: 12)),
+      label: Text(text, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface)),
+      backgroundColor: theme.colorScheme.surfaceContainerHighest,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
     );
@@ -333,28 +376,49 @@ class _Chip extends StatelessWidget {
 }
 
 class _TrailersTab extends StatelessWidget {
-  final List<Map<String, dynamic>> videos;
-
   const _TrailersTab({required this.videos});
+
+  final List<Map<String, dynamic>> videos;
 
   static String _youtubeThumbnail(String videoKey) =>
       'https://img.youtube.com/vi/$videoKey/mqdefault.jpg';
 
-  static Future<void> _openYoutube(String key) async {
-    // Prefer YouTube app (Android / iOS)
-    final appUri = Uri.parse('vnd.youtube://watch?v=$key');
+  static Future<bool> _openYoutube(BuildContext context, String key) async {
+    if (key.isEmpty) return false;
     final webUri = Uri.parse('https://www.youtube.com/watch?v=$key');
+    // 1. Try YouTube app scheme first (don't use canLaunchUrl - it often returns false on Android 11+)
+    final appUri = Uri.parse('vnd.youtube://watch?v=$key');
     try {
-      if (await canLaunchUrl(appUri)) {
-        await launchUrl(appUri, mode: LaunchMode.externalApplication);
-        return;
-      }
+      await launchUrl(appUri, mode: LaunchMode.externalApplication);
+      return true;
     } catch (_) {}
+    // 2. On Android: intent URL to force YouTube app (package=com.google.android.youtube)
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        final intentUri = Uri.parse(
+          'intent://www.youtube.com/watch?v=$key#Intent;'
+          'package=com.google.android.youtube;'
+          'scheme=https;'
+          'end',
+        );
+        await launchUrl(intentUri, mode: LaunchMode.externalApplication);
+        return true;
+      } catch (_) {}
+    }
+    // 3. Fallback: open in external app (browser or YouTube if system prefers it)
     try {
-      if (await canLaunchUrl(webUri)) {
-        await launchUrl(webUri, mode: LaunchMode.externalApplication);
-      }
+      await launchUrl(webUri, mode: LaunchMode.externalApplication);
+      return true;
     } catch (_) {}
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Couldn\'t open trailer. Install YouTube app or try in a browser.'),
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
+    return false;
   }
 
   @override
@@ -362,6 +426,7 @@ class _TrailersTab extends StatelessWidget {
     if (videos.isEmpty) {
       return const Center(child: Text('No trailers available'));
     }
+    final theme = Theme.of(context);
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: videos.length,
@@ -374,7 +439,7 @@ class _TrailersTab extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           margin: const EdgeInsets.only(bottom: 12),
           child: InkWell(
-            onTap: key.isNotEmpty ? () => _openYoutube(key) : null,
+            onTap: key.isNotEmpty ? () => _openYoutube(context, key) : null,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -386,15 +451,15 @@ class _TrailersTab extends StatelessWidget {
                           thumbUrl,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => ColoredBox(
-                            color: Colors.grey.shade800,
-                            child: const Icon(Icons.play_circle_outline,
-                                color: Colors.red, size: 48),
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: Icon(Icons.play_circle_outline,
+                                color: theme.colorScheme.primary, size: 48),
                           ),
                         )
                       : ColoredBox(
-                          color: Colors.grey.shade800,
-                          child: const Icon(Icons.play_circle_outline,
-                              color: Colors.red, size: 48),
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          child: Icon(Icons.play_circle_outline,
+                              color: theme.colorScheme.primary, size: 48),
                         ),
                 ),
                 const SizedBox(width: 8),
@@ -403,7 +468,7 @@ class _TrailersTab extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                     child: Row(
                       children: [
-                        const Icon(Icons.play_circle_filled, color: Colors.red, size: 28),
+                        Icon(Icons.play_circle_filled, color: theme.colorScheme.primary, size: 28),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(

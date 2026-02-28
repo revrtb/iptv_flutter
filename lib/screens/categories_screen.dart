@@ -4,6 +4,9 @@ import 'package:provider/provider.dart';
 import '../models/live_category.dart';
 import '../providers/auth_provider.dart';
 import '../providers/categories_provider.dart';
+import '../widgets/streaming/content_tile.dart';
+import '../widgets/streaming/search_field.dart';
+import '../widgets/streaming/streaming_app_bar.dart';
 import 'streams_screen.dart';
 
 class CategoriesScreen extends StatefulWidget {
@@ -46,22 +49,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Live TV')),
+      appBar: StreamingAppBar(
+        title: 'Live TV',
+        showBackButton: true,
+      ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search category',
-                hintText: 'Filter categories...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              textInputAction: TextInputAction.search,
-            ),
+          StreamingSearchField(
+            controller: _searchController,
+            label: 'Search category',
+            hint: 'Filter categories...',
+            onChanged: (_) => setState(() {}),
           ),
           Expanded(
             child: Consumer<CategoriesProvider>(
@@ -109,12 +107,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final category = filtered[index];
-                      final count = prov.countsLoading
-                          ? null
-                          : prov.getCategoryCount(category.categoryId);
-                      return _CategoryTile(
-                        category: category,
-                        channelCount: count,
+                      final count = prov.getCategoryCount(category.categoryId);
+                      final countLabel = count > 0 ? '$count channels' : null;
+                      return ContentTile(
+                        title: category.categoryName,
+                        subtitle: countLabel,
+                        fallbackIcon: Icons.live_tv,
                         onTap: () => _openStreams(context, category),
                       );
                     },
@@ -134,31 +132,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       MaterialPageRoute<void>(
         builder: (context) => StreamsScreen(category: category),
       ),
-    );
-  }
-}
-
-class _CategoryTile extends StatelessWidget {
-  final LiveCategory category;
-  final int? channelCount;
-  final VoidCallback onTap;
-
-  const _CategoryTile({
-    required this.category,
-    required this.channelCount,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final countLabel = channelCount == null ? '...' : channelCount.toString();
-    return ListTile(
-      leading: CircleAvatar(
-        child: Icon(Icons.folder, color: Theme.of(context).colorScheme.onPrimary),
-      ),
-      title: Text('${category.categoryName} ($countLabel)'),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: onTap,
     );
   }
 }

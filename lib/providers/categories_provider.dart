@@ -3,127 +3,100 @@ import 'package:flutter/foundation.dart';
 import '../models/live_category.dart';
 import '../models/live_stream.dart';
 import '../services/api_service.dart';
+import '../services/playlist_cache.dart';
 
 class CategoriesProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
+  final PlaylistCache<List<LiveCategory>> _categoriesCache = PlaylistCache<List<LiveCategory>>(
+    ttl: const Duration(minutes: 10),
+  );
+  final KeyedPlaylistCache<List<LiveStream>> _catchUpCache = KeyedPlaylistCache<List<LiveStream>>(
+    ttl: const Duration(minutes: 10),
+  );
 
   List<LiveCategory> _categories = [];
-  List<LiveStream> _allStreams = [];
-  final Map<String, int> _categoryCounts = {};
-  final Map<String, int> _catchUpCountByCategoryId = {};
-  final Map<String, List<LiveStream>> _catchUpStreamsByCategoryId = {};
   bool _isLoading = false;
-  bool _countsLoading = false;
   String? _errorMessage;
 
   List<LiveCategory> get categories => _categories;
-  List<LiveStream> get allLiveStreams => _allStreams;
   bool get isLoading => _isLoading;
-  bool get countsLoading => _countsLoading;
   String? get errorMessage => _errorMessage;
 
-  int getCategoryCount(String categoryId) =>
-      _categoryCounts[categoryId.trim()] ?? _categoryCounts[categoryId] ?? 0;
+  int getCategoryCount(String categoryId) => 0;
 
   int getCatchUpCount(String categoryId) {
     final id = categoryId.trim();
-    return _catchUpCountByCategoryId[id] ?? _catchUpCountByCategoryId[categoryId] ?? 0;
+    final list = _catchUpCache.get(id);
+    return list?.length ?? 0;
   }
 
   List<LiveStream> getCatchUpStreamsForCategory(String categoryId) {
     final id = categoryId.trim();
-    return _catchUpStreamsByCategoryId[id] ?? _catchUpStreamsByCategoryId[categoryId] ?? [];
+    return _catchUpCache.get(id) ?? [];
   }
 
-  /// Load categories and counts once; reuse cache on later navigation unless [forceRefresh].
+  /// Load only categories. Uses cache when fresh.
   Future<void> loadCategories({
     required String serverUrl,
     required String username,
     required String password,
     bool forceRefresh = false,
   }) async {
-    if (!forceRefresh &&
-        _categories.isNotEmpty &&
-        _categoryCounts.isNotEmpty &&
-        !_countsLoading) {
+    if (!forceRefresh && !_categoriesCache.isStale && _categoriesCache.data != null) {
+      _categories = _categoriesCache.data!;
       _isLoading = false;
       notifyListeners();
       return;
     }
-    if (!forceRefresh && _categories.isNotEmpty && _countsLoading) {
-      _isLoading = false;
-      notifyListeners();
-      return;
-    }
-    if (forceRefresh) {
-      _categories = [];
-      _allStreams = [];
-      _categoryCounts.clear();
-      _catchUpCountByCategoryId.clear();
-      _catchUpStreamsByCategoryId.clear();
-    }
+    if (forceRefresh) _categoriesCache.clear();
+
     _isLoading = true;
     _errorMessage = null;
-    _countsLoading = true;
     notifyListeners();
+
     try {
       _categories = await _api.getLiveCategories(
         serverUrl: serverUrl,
         username: username,
         password: password,
       );
-      _isLoading = false;
-      notifyListeners();
+      _categoriesCache.set(_categories);
     } catch (e) {
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
       _categories = [];
+    } finally {
       _isLoading = false;
-      _countsLoading = false;
       notifyListeners();
-      return;
     }
-    _loadCountsInBackground(serverUrl: serverUrl, username: username, password: password);
   }
 
-  void _loadCountsInBackground({
+  /// Load catch-up streams for one category (on demand). Fills cache for getCatchUpCount/getCatchUpStreamsForCategory.
+  Future<void> loadCatchUpForCategory({
     required String serverUrl,
     required String username,
     required String password,
+    required String categoryId,
+    bool forceRefresh = false,
   }) async {
+    final id = categoryId.trim();
+    if (!forceRefresh && _catchUpCache.isFresh(id)) {
+      notifyListeners();
+      return;
+    }
+
     try {
       final all = await _api.getLiveStreams(
         serverUrl: serverUrl,
         username: username,
         password: password,
-        categoryId: null,
+        categoryId: id,
       );
-      _allStreams = all;
-      _categoryCounts.clear();
-      _catchUpCountByCategoryId.clear();
-      _catchUpStreamsByCategoryId.clear();
-      for (final s in all) {
-        for (final id in s.categoryIdsForCount) {
-          if (id.isNotEmpty) {
-            _categoryCounts[id] = (_categoryCounts[id] ?? 0) + 1;
-          }
-        }
-        if (s.hasCatchUp) {
-          final ids = <String>{s.categoryId.trim()};
-          for (final id in s.categoryIdsForCount) {
-            if (id.isNotEmpty) ids.add(id);
-          }
-          for (final id in ids) {
-            _catchUpCountByCategoryId[id] = (_catchUpCountByCategoryId[id] ?? 0) + 1;
-            _catchUpStreamsByCategoryId.putIfAbsent(id, () => []).add(s);
-          }
-        }
-      }
+      final catchUp = all.where((s) => s.hasCatchUp).toList();
+      _catchUpCache.set(id, catchUp);
     } catch (_) {
-      // Leave counts empty; categories are already shown
-    } finally {
-      _countsLoading = false;
-      notifyListeners();
+      _catchUpCache.set(id, []);
     }
+    notifyListeners();
   }
 
   void clearError() {

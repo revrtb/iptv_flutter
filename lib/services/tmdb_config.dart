@@ -12,7 +12,7 @@ class TmdbConfig {
   factory TmdbConfig.fromEnvironment() {
     const key = String.fromEnvironment(
       'TMDB_API_KEY',
-      defaultValue: '',
+      defaultValue: '7045bc4055c6293e84534dd8f6dbb024',
     );
     return TmdbConfig(apiKey: key);
   }

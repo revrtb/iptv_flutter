@@ -5,6 +5,8 @@ import '../models/live_category.dart';
 import '../models/series_item.dart';
 import '../providers/auth_provider.dart';
 import '../providers/series_provider.dart';
+import '../widgets/streaming/search_field.dart';
+import '../widgets/streaming/streaming_app_bar.dart';
 import '../widgets/series_tile.dart';
 import 'series_detail_screen.dart';
 
@@ -42,7 +44,7 @@ class _SeriesListScreenState extends State<SeriesListScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool forceRefresh = false}) async {
     final auth = context.read<AuthProvider>();
     if (auth.serverUrl == null || auth.username == null || auth.password == null) return;
     final categoryId = widget.category.categoryId.trim().isEmpty
@@ -53,33 +55,48 @@ class _SeriesListScreenState extends State<SeriesListScreen> {
           username: auth.username!,
           password: auth.password!,
           categoryId: categoryId,
+          forceRefresh: forceRefresh,
         );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.category.categoryName)),
+      appBar: StreamingAppBar(
+        title: widget.category.categoryName,
+        showBackButton: true,
+      ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search series',
-                hintText: 'Filter series...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              textInputAction: TextInputAction.search,
-            ),
+          StreamingSearchField(
+            controller: _searchController,
+            label: 'Search series',
+            hint: 'Filter series...',
+            onChanged: (_) => setState(() {}),
           ),
           Expanded(
             child: Consumer<SeriesProvider>(
               builder: (context, prov, _) {
-                if (prov.isLoading) return const Center(child: CircularProgressIndicator());
+                if (prov.isLoading) {
+                  final isAll = widget.category.categoryId.trim().isEmpty;
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const CircularProgressIndicator(),
+                        if (isAll) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            'Loading your playlist…',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }
                 if (prov.errorMessage != null) {
                   return Center(
                     child: Padding(
@@ -109,7 +126,7 @@ class _SeriesListScreenState extends State<SeriesListScreen> {
                   );
                 }
                 return RefreshIndicator(
-                  onRefresh: _load,
+                  onRefresh: () => _load(forceRefresh: true),
                   child: ListView.builder(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: filtered.length,

@@ -1,31 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../providers/auth_provider.dart';
-import '../providers/series_provider.dart';
 import '../providers/tmdb_provider.dart';
-import '../providers/vod_provider.dart';
 import '../services/tmdb_service.dart';
-import '../widgets/streaming/menu_tile.dart';
 import '../widgets/streaming/poster_card.dart';
 import '../widgets/streaming/section_header.dart';
 import '../widgets/streaming/streaming_app_bar.dart';
-import 'categories_screen.dart';
-import 'vod_categories_screen.dart';
-import 'series_categories_screen.dart';
-import 'catch_up_screen.dart';
+import 'login_screen.dart';
 import 'tmdb_media_detail_screen.dart';
 
-enum MenuItemType { liveTv, movies, series, catchUp }
-
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+/// First screen when user is not logged in: TMDB trending + "IPTV Login" button.
+class LandingScreen extends StatefulWidget {
+  const LandingScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<LandingScreen> createState() => _LandingScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _LandingScreenState extends State<LandingScreen> {
   @override
   void initState() {
     super.initState();
@@ -37,42 +29,24 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: StreamingAppBar(
-        title: 'IPTV',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_outlined),
-            onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Logout'),
-                  content: const Text('Do you want to logout?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Cancel'),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Logout'),
-                    ),
-                  ],
-                ),
-              );
-              if (ok == true && context.mounted) {
-                context.read<AuthProvider>().logout();
-              }
-            },
-          ),
-        ],
-      ),
+      appBar: const StreamingAppBar(title: 'IPTV'),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
           Consumer<TmdbProvider>(
             builder: (context, tmdb, _) {
-              if (!tmdb.isConfigured) return const SizedBox.shrink();
+              if (!tmdb.isConfigured) {
+                return const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                    child: Text(
+                      'TMDB is not configured. Add API key to see trending content.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white54),
+                    ),
+                  ),
+                );
+              }
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -97,7 +71,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 onTap: () => _openDetail(
                                   context,
                                   isMovie: true,
-                                  id: m['id'] is int ? m['id'] as int : int.tryParse(m['id']?.toString() ?? '') ?? 0,
+                                  id: m['id'] is int
+                                      ? m['id'] as int
+                                      : int.tryParse(m['id']?.toString() ?? '') ?? 0,
                                   title: title,
                                   posterPath: posterPath,
                                   backdropPath: m['backdrop_path']?.toString(),
@@ -127,7 +103,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 onTap: () => _openDetail(
                                   context,
                                   isMovie: false,
-                                  id: s['id'] is int ? s['id'] as int : int.tryParse(s['id']?.toString() ?? '') ?? 0,
+                                  id: s['id'] is int
+                                      ? s['id'] as int
+                                      : int.tryParse(s['id']?.toString() ?? '') ?? 0,
                                   title: title,
                                   posterPath: posterPath,
                                   backdropPath: s['backdrop_path']?.toString(),
@@ -140,42 +118,28 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
-          const SectionHeader(
-            title: 'Watch',
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-          ),
+          const SizedBox(height: 24),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: [
-                MenuTile(
-                  title: 'Live TV',
-                  subtitle: 'Watch live channels',
-                  icon: Icons.live_tv,
-                  onTap: () => _navigate(context, MenuItemType.liveTv),
-                ),
-                MenuTile(
-                  title: 'Movies',
-                  subtitle: 'Video on demand',
-                  icon: Icons.movie_outlined,
-                  onTap: () => _navigate(context, MenuItemType.movies),
-                ),
-                MenuTile(
-                  title: 'Series',
-                  subtitle: 'TV series',
-                  icon: Icons.tv_outlined,
-                  onTap: () => _navigate(context, MenuItemType.series),
-                ),
-                MenuTile(
-                  title: 'Catch Up',
-                  subtitle: 'Replay past broadcasts',
-                  icon: Icons.replay,
-                  onTap: () => _navigate(context, MenuItemType.catchUp),
-                ),
-              ],
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: FilledButton.icon(
+              onPressed: _goToLogin,
+              icon: const Icon(Icons.login),
+              label: const Text('IPTV Login'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _goToLogin() {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (context) => const LoginScreen(),
       ),
     );
   }
@@ -202,42 +166,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  void _navigate(BuildContext context, MenuItemType type) {
-    switch (type) {
-      case MenuItemType.liveTv:
-        Navigator.push(
-          context,
-          MaterialPageRoute<void>(
-            builder: (context) => const CategoriesScreen(),
-          ),
-        );
-        break;
-      case MenuItemType.movies:
-        Navigator.push(
-          context,
-          MaterialPageRoute<void>(
-            builder: (context) => const VodCategoriesScreen(),
-          ),
-        );
-        break;
-      case MenuItemType.series:
-        Navigator.push(
-          context,
-          MaterialPageRoute<void>(
-            builder: (context) => const SeriesCategoriesScreen(),
-          ),
-        );
-        break;
-      case MenuItemType.catchUp:
-        Navigator.push(
-          context,
-          MaterialPageRoute<void>(
-            builder: (context) => const CatchUpScreen(),
-          ),
-        );
-        break;
-    }
-  }
 }
-

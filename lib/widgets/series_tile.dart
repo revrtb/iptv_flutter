@@ -25,22 +25,35 @@ class SeriesTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const size = 48.0;
+    const radius = 10.0;
     return ListTile(
       leading: _coverUrl.isEmpty
-          ? CircleAvatar(
-              child: Icon(Icons.tv, color: Theme.of(context).colorScheme.onPrimary),
+          ? Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(radius),
+              ),
+              child: Icon(Icons.tv, color: theme.colorScheme.primary),
             )
-          : CircleAvatar(
-              child: ClipOval(
-                child: Image.network(
-                  _coverUrl,
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(
-                    Icons.tv,
-                    color: Theme.of(context).colorScheme.onPrimary,
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              child: Image.network(
+                _coverUrl,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(radius),
                   ),
+                  child: Icon(Icons.tv, color: theme.colorScheme.primary),
                 ),
               ),
             ),

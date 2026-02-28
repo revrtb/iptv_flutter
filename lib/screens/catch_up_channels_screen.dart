@@ -4,20 +4,18 @@ import 'package:provider/provider.dart';
 import '../models/live_category.dart';
 import '../models/live_stream.dart';
 import '../providers/auth_provider.dart';
+import '../providers/categories_provider.dart';
 import '../utils/layout_utils.dart';
 import '../widgets/channel_tile.dart';
 import '../widgets/inline_player.dart';
+import '../widgets/streaming/search_field.dart';
+import '../widgets/streaming/streaming_app_bar.dart';
 import 'player_screen.dart';
 
 class CatchUpChannelsScreen extends StatefulWidget {
   final LiveCategory category;
-  final List<LiveStream> catchUpStreams;
 
-  const CatchUpChannelsScreen({
-    super.key,
-    required this.category,
-    required this.catchUpStreams,
-  });
+  const CatchUpChannelsScreen({super.key, required this.category});
 
   @override
   State<CatchUpChannelsScreen> createState() => _CatchUpChannelsScreenState();
@@ -27,18 +25,35 @@ class _CatchUpChannelsScreenState extends State<CatchUpChannelsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   LiveStream? _selectedStream;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(
         () => setState(() => _searchQuery = _searchController.text.trim().toLowerCase()));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCatchUp());
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCatchUp() async {
+    final auth = context.read<AuthProvider>();
+    if (auth.serverUrl == null || auth.username == null || auth.password == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    await context.read<CategoriesProvider>().loadCatchUpForCategory(
+          serverUrl: auth.serverUrl!,
+          username: auth.username!,
+          password: auth.password!,
+          categoryId: widget.category.categoryId,
+        );
+    if (mounted) setState(() => _loading = false);
   }
 
   @override
@@ -48,14 +63,11 @@ class _CatchUpChannelsScreenState extends State<CatchUpChannelsScreen> {
     final playerUrl = _selectedStream != null && auth.serverUrl != null && auth.username != null && auth.password != null
         ? _selectedStream!.buildStreamUrl(auth.serverUrl!, auth.username!, auth.password!)
         : null;
-    final filtered = _searchQuery.isEmpty
-        ? widget.catchUpStreams
-        : widget.catchUpStreams
-            .where((s) => s.name.toLowerCase().contains(_searchQuery))
-            .toList();
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${widget.category.categoryName} (${widget.catchUpStreams.length})'),
+      appBar: StreamingAppBar(
+        title: widget.category.categoryName,
+        showBackButton: true,
       ),
       body: Column(
         children: [
@@ -70,30 +82,35 @@ class _CatchUpChannelsScreenState extends State<CatchUpChannelsScreen> {
                 ),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search Channel',
-                hintText: 'Filter channels...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              textInputAction: TextInputAction.search,
-            ),
+          StreamingSearchField(
+            controller: _searchController,
+            label: 'Search Channel',
+            hint: 'Filter channels...',
+            onChanged: (_) => setState(() {}),
           ),
           Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Text(
-                      widget.catchUpStreams.isEmpty
-                          ? 'No catch-up channels in this category'
-                          : 'No channels match "$_searchQuery"',
-                    ),
-                  )
-                : _buildCatchUpList(filtered, useSplit, auth),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : Consumer<CategoriesProvider>(
+                    builder: (context, catProv, _) {
+                      final catchUpStreams = catProv.getCatchUpStreamsForCategory(widget.category.categoryId);
+                      final filtered = _searchQuery.isEmpty
+                          ? catchUpStreams
+                          : catchUpStreams
+                              .where((s) => s.name.toLowerCase().contains(_searchQuery))
+                              .toList();
+                      if (filtered.isEmpty) {
+                        return Center(
+                          child: Text(
+                            catchUpStreams.isEmpty
+                                ? 'No catch-up channels in this category'
+                                : 'No channels match "$_searchQuery"',
+                          ),
+                        );
+                      }
+                      return _buildCatchUpList(filtered, useSplit, auth);
+                    },
+                  ),
           ),
         ],
       ),
@@ -109,21 +126,21 @@ class _CatchUpChannelsScreenState extends State<CatchUpChannelsScreen> {
       });
     }
     return ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      final stream = filtered[index];
-                      return ChannelTile(
-                        stream: stream,
-                        serverUrl: auth.serverUrl!,
-                        username: auth.username!,
-                        password: auth.password!,
-                        onTap: () => useSplit
-                            ? setState(() => _selectedStream = stream)
-                            : _openPlayer(context, stream),
-                      );
-                    },
-                  );
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: filtered.length,
+      itemBuilder: (context, index) {
+        final stream = filtered[index];
+        return ChannelTile(
+          stream: stream,
+          serverUrl: auth.serverUrl!,
+          username: auth.username!,
+          password: auth.password!,
+          onTap: () => useSplit
+              ? setState(() => _selectedStream = stream)
+              : _openPlayer(context, stream),
+        );
+      },
+    );
   }
 
   void _openPlayer(BuildContext context, LiveStream stream) {

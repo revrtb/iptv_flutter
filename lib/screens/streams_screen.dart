@@ -8,6 +8,8 @@ import '../providers/streams_provider.dart';
 import '../utils/layout_utils.dart';
 import '../widgets/channel_tile.dart';
 import '../widgets/inline_player.dart';
+import '../widgets/streaming/search_field.dart';
+import '../widgets/streaming/streaming_app_bar.dart';
 import 'player_screen.dart';
 
 class StreamsScreen extends StatefulWidget {
@@ -37,7 +39,7 @@ class _StreamsScreenState extends State<StreamsScreen> {
     super.dispose();
   }
 
-  Future<void> _loadStreams() async {
+  Future<void> _loadStreams({bool forceRefresh = false}) async {
     final auth = context.read<AuthProvider>();
     if (auth.serverUrl == null || auth.username == null || auth.password == null) {
       return;
@@ -47,6 +49,7 @@ class _StreamsScreenState extends State<StreamsScreen> {
           username: auth.username!,
           password: auth.password!,
           categoryId: widget.category.categoryId,
+          forceRefresh: forceRefresh,
         );
   }
 
@@ -59,7 +62,10 @@ class _StreamsScreenState extends State<StreamsScreen> {
         : null;
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.category.categoryName)),
+      appBar: StreamingAppBar(
+        title: widget.category.categoryName,
+        showBackButton: true,
+      ),
       body: Column(
         children: [
           if (useSplit)
@@ -73,19 +79,11 @@ class _StreamsScreenState extends State<StreamsScreen> {
                 ),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search channels',
-                hintText: 'Filter channels...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              textInputAction: TextInputAction.search,
-            ),
+          StreamingSearchField(
+            controller: _searchController,
+            label: 'Search channels',
+            hint: 'Filter channels...',
+            onChanged: (_) => setState(() {}),
           ),
           Expanded(
             child: Consumer<StreamsProvider>(
@@ -134,7 +132,7 @@ class _StreamsScreenState extends State<StreamsScreen> {
                   });
                 }
                 return RefreshIndicator(
-                  onRefresh: _loadStreams,
+                  onRefresh: () => _loadStreams(forceRefresh: true),
                   child: ListView.builder(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: filtered.length,

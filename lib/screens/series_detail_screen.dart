@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../utils/layout_utils.dart';
 import '../widgets/inline_player.dart';
+import '../widgets/streaming/streaming_app_bar.dart';
 import 'player_screen.dart';
 
 class SeriesDetailScreen extends StatefulWidget {
@@ -124,7 +125,10 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.series.name)),
+      appBar: StreamingAppBar(
+        title: widget.series.name,
+        showBackButton: true,
+      ),
       body: useSplit
           ? Column(
               children: [

@@ -8,6 +8,8 @@ import 'providers/streams_provider.dart';
 import 'providers/vod_provider.dart';
 import 'providers/series_provider.dart';
 import 'providers/tmdb_provider.dart';
+import 'theme/app_theme.dart';
+import 'screens/landing_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 
@@ -40,10 +42,7 @@ class IptvApp extends StatelessWidget {
       child: MaterialApp(
         title: 'IPTV Player',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-          useMaterial3: true,
-        ),
+        theme: AppTheme.dark,
         home: Consumer<AuthProvider>(
           builder: (context, auth, _) {
             if (auth.isLoading) {
@@ -54,7 +53,7 @@ class IptvApp extends StatelessWidget {
             if (auth.isLoggedIn) {
               return const HomeScreen();
             }
-            return const LoginScreen();
+            return const LandingScreen();
           },
         ),
       ),

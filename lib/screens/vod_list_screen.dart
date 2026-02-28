@@ -7,6 +7,8 @@ import '../providers/auth_provider.dart';
 import '../providers/vod_provider.dart';
 import '../utils/layout_utils.dart';
 import '../widgets/inline_player.dart';
+import '../widgets/streaming/search_field.dart';
+import '../widgets/streaming/streaming_app_bar.dart';
 import '../widgets/vod_tile.dart';
 import 'player_screen.dart';
 
@@ -45,7 +47,7 @@ class _VodListScreenState extends State<VodListScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool forceRefresh = false}) async {
     final auth = context.read<AuthProvider>();
     if (auth.serverUrl == null || auth.username == null || auth.password == null) return;
     final categoryId = widget.category.categoryId.trim().isEmpty
@@ -56,19 +58,24 @@ class _VodListScreenState extends State<VodListScreen> {
           username: auth.username!,
           password: auth.password!,
           categoryId: categoryId,
+          forceRefresh: forceRefresh,
         );
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
-    final useSplit = isMobilePortrait(context);
+    final isAll = widget.category.categoryId.trim().isEmpty;
+    final useSplit = !isAll && isMobilePortrait(context);
     final playerUrl = _selectedItem != null && auth.serverUrl != null && auth.username != null && auth.password != null
         ? _selectedItem!.buildStreamUrl(auth.serverUrl!, auth.username!, auth.password!)
         : null;
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.category.categoryName)),
+      appBar: StreamingAppBar(
+        title: widget.category.categoryName,
+        showBackButton: true,
+      ),
       body: Column(
         children: [
           if (useSplit)
@@ -82,24 +89,35 @@ class _VodListScreenState extends State<VodListScreen> {
                 ),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search movies',
-                hintText: 'Filter movies...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              textInputAction: TextInputAction.search,
-            ),
+          StreamingSearchField(
+            controller: _searchController,
+            label: 'Search movies',
+            hint: 'Filter movies...',
+            onChanged: (_) => setState(() {}),
           ),
           Expanded(
             child: Consumer<VodProvider>(
               builder: (context, prov, _) {
-                if (prov.isLoading) return const Center(child: CircularProgressIndicator());
+                if (prov.isLoading) {
+                  final isAll = widget.category.categoryId.trim().isEmpty;
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const CircularProgressIndicator(),
+                        if (isAll) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            'Loading your playlist…',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }
                 if (prov.errorMessage != null) {
                   return Center(
                     child: Padding(
@@ -136,7 +154,7 @@ class _VodListScreenState extends State<VodListScreen> {
                   });
                 }
                 return RefreshIndicator(
-                  onRefresh: _load,
+                  onRefresh: () => _load(forceRefresh: true),
                   child: ListView.builder(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: filtered.length,

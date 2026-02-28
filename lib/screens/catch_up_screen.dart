@@ -4,6 +4,9 @@ import 'package:provider/provider.dart';
 import '../models/live_category.dart';
 import '../providers/auth_provider.dart';
 import '../providers/categories_provider.dart';
+import '../widgets/streaming/content_tile.dart';
+import '../widgets/streaming/search_field.dart';
+import '../widgets/streaming/streaming_app_bar.dart';
 import 'catch_up_channels_screen.dart';
 
 class CatchUpScreen extends StatefulWidget {
@@ -44,22 +47,14 @@ class _CatchUpScreenState extends State<CatchUpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Catch Up')),
+      appBar: const StreamingAppBar(title: 'Catch Up'),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search category',
-                hintText: 'Filter categories...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              textInputAction: TextInputAction.search,
-            ),
+          StreamingSearchField(
+            controller: _searchController,
+            label: 'Search category',
+            hint: 'Filter categories...',
+            onChanged: (_) => setState(() {}),
           ),
           Expanded(
             child: Consumer<CategoriesProvider>(
@@ -90,11 +85,8 @@ class _CatchUpScreenState extends State<CatchUpScreen> {
                     ),
                   );
                 }
-                final streamsReady = !catProv.countsLoading;
                 final categoriesWithCount = catProv.categories.map((c) {
-                  final count = streamsReady
-                      ? catProv.getCatchUpCount(c.categoryId)
-                      : null;
+                  final count = catProv.getCatchUpCount(c.categoryId);
                   return MapEntry(c, count);
                 }).toList();
                 final filtered = _searchQuery.isEmpty
@@ -121,23 +113,15 @@ class _CatchUpScreenState extends State<CatchUpScreen> {
                       final entry = filtered[index];
                       final category = entry.key;
                       final count = entry.value;
-                      final countLabel = count == null ? '...' : count.toString();
-                      return ListTile(
-                        leading: CircleAvatar(
-                          child: Icon(
-                            Icons.folder,
-                            color: Theme.of(context).colorScheme.onPrimary,
-                          ),
-                        ),
-                        title: Text('${category.categoryName} ($countLabel)'),
-                        trailing: const Icon(Icons.chevron_right),
+                      final countLabel = count > 0 ? '$count programs' : 'Tap to view';
+                      return ContentTile(
+                        title: category.categoryName,
+                        subtitle: countLabel,
+                        fallbackIcon: Icons.folder_outlined,
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute<void>(
-                            builder: (context) => CatchUpChannelsScreen(
-                              category: category,
-                              catchUpStreams: catProv.getCatchUpStreamsForCategory(category.categoryId),
-                            ),
+                            builder: (context) => CatchUpChannelsScreen(category: category),
                           ),
                         ),
                       );

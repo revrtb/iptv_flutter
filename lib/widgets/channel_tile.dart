@@ -32,25 +32,35 @@ class ChannelTile extends StatelessWidget {
   }
 
   Widget _buildLeading(BuildContext context) {
+    final theme = Theme.of(context);
+    const size = 48.0;
+    const radius = 10.0;
     if (_logoUrl.isEmpty) {
-      return CircleAvatar(
-        child: Icon(
-          Icons.live_tv,
-          color: Theme.of(context).colorScheme.onPrimary,
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primary.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(radius),
         ),
+        child: Icon(Icons.live_tv, color: theme.colorScheme.primary),
       );
     }
-    return CircleAvatar(
-      child: ClipOval(
-        child: Image.network(
-          _logoUrl,
-          width: 40,
-          height: 40,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Icon(
-            Icons.live_tv,
-            color: Theme.of(context).colorScheme.onPrimary,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: Image.network(
+        _logoUrl,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(radius),
           ),
+          child: Icon(Icons.live_tv, color: theme.colorScheme.primary),
         ),
       ),
     );

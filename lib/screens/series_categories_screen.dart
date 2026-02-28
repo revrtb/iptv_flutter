@@ -4,6 +4,9 @@ import 'package:provider/provider.dart';
 import '../models/live_category.dart';
 import '../providers/auth_provider.dart';
 import '../providers/series_provider.dart';
+import '../widgets/streaming/content_tile.dart';
+import '../widgets/streaming/search_field.dart';
+import '../widgets/streaming/streaming_app_bar.dart';
 import 'series_list_screen.dart';
 
 class SeriesCategoriesScreen extends StatefulWidget {
@@ -44,22 +47,14 @@ class _SeriesCategoriesScreenState extends State<SeriesCategoriesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Series')),
+      appBar: StreamingAppBar(title: 'Series', showBackButton: true),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search category',
-                hintText: 'Filter categories...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              textInputAction: TextInputAction.search,
-            ),
+          StreamingSearchField(
+            controller: _searchController,
+            label: 'Search category',
+            hint: 'Filter categories...',
+            onChanged: (_) => setState(() {}),
           ),
           Expanded(
             child: Consumer<SeriesProvider>(
@@ -100,23 +95,19 @@ class _SeriesCategoriesScreenState extends State<SeriesCategoriesScreen> {
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final category = filtered[index];
-                      final count = prov.countsLoading
-                          ? null
-                          : prov.getCategoryCount(category.categoryId);
-                      final countLabel = count == null ? '...' : count.toString();
-                      return ListTile(
-                  leading: CircleAvatar(
-                    child: Icon(Icons.folder, color: Theme.of(context).colorScheme.onPrimary),
-                  ),
-                  title: Text('${category.categoryName} ($countLabel)'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (context) => SeriesListScreen(category: category),
-                    ),
-                  ),
-                );
+                      final count = prov.getCategoryCount(category.categoryId);
+                      final countLabel = count > 0 ? '$count series' : null;
+                      return ContentTile(
+                        title: category.categoryName,
+                        subtitle: countLabel,
+                        fallbackIcon: Icons.tv_outlined,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (context) => SeriesListScreen(category: category),
+                          ),
+                        ),
+                      );
                     },
                   ),
                 );

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/user_info.dart';
@@ -31,22 +32,59 @@ class ApiService {
   static const _defaultTimeout = Duration(seconds: 15);
   /// Bulk "get all" requests (no category) can be very slow; 90s covers ~42s observed + variance.
   static const _bulkTimeout = Duration(seconds: 90);
+  static const _retryDelay = Duration(seconds: 2);
+
+  /// Redact password in URL for safe logging (query param password=xxx).
+  static String _redactPasswordInUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final q = Map<String, String>.from(uri.queryParameters);
+      if (q.containsKey('password')) q['password'] = '***';
+      return uri.replace(queryParameters: q).toString();
+    } catch (_) {
+      return url.replaceAll(RegExp(r'password=[^&]+'), 'password=***');
+    }
+  }
+
+  static bool _isConnectionError(Object e, [StackTrace? st]) {
+    final msg = e.toString().toLowerCase();
+    return msg.contains('connection') ||
+        msg.contains('closed before full header') ||
+        msg.contains('socket') ||
+        msg.contains('connection reset') ||
+        msg.contains('connection timeout');
+  }
 
   /// Returns decoded JSON (Map or List). [timeout] for bulk lists (e.g. all streams) can be longer.
-  Future<dynamic> _getJson(String url, {Duration? timeout}) async {
+  /// [retries] for bulk requests: retry on connection closed / timeout (server may drop large responses).
+  Future<dynamic> _getJson(String url, {Duration? timeout, int retries = 0}) async {
     final t = timeout ?? _defaultTimeout;
-    final response = await http.get(Uri.parse(url)).timeout(
-      t,
-      onTimeout: () => throw Exception('Connection timeout'),
-    );
-    if (response.statusCode != 200) {
-      throw Exception('Server error: ${response.statusCode}');
+    int attempt = 0;
+    while (true) {
+      try {
+        // Log playlist/API request (redact password in log)
+        final safeUrl = _redactPasswordInUrl(url);
+        debugPrint('AAAA REQUEST GET $safeUrl');
+        final response = await http.get(Uri.parse(url)).timeout(
+          t,
+          onTimeout: () => throw Exception('Connection timeout'),
+        );
+        if (response.statusCode != 200) {
+          throw Exception('Server error: ${response.statusCode}');
+        }
+        debugPrint('AAAA RESPONSE ${response.statusCode} ${_redactPasswordInUrl(url)}');
+        final decoded = json.decode(response.body);
+        if (decoded is! Map && decoded is! List) {
+          throw Exception('Invalid API response');
+        }
+        return decoded;
+      } catch (e, st) {
+        final canRetry = retries > 0 && attempt < retries && _isConnectionError(e, st);
+        if (!canRetry) rethrow;
+        attempt++;
+        await Future<void>.delayed(_retryDelay);
+      }
     }
-    final decoded = json.decode(response.body);
-    if (decoded is! Map && decoded is! List) {
-      throw Exception('Invalid API response');
-    }
-    return decoded;
   }
 
   /// Extract a List from API response (Map or List). Tries known keys then first list value.
@@ -111,7 +149,11 @@ class ApiService {
     }
     final url = _playerApiUrl(serverUrl, username, password, query);
     final isBulk = categoryId == null || categoryId.isEmpty;
-    final data = await _getJson(url, timeout: isBulk ? _bulkTimeout : null);
+    final data = await _getJson(
+      url,
+      timeout: isBulk ? _bulkTimeout : null,
+      retries: isBulk ? 2 : 0,
+    );
     final list = _extractList(data, ['streams', 'live_streams', 'livestreams', 'live', 'channels']);
     if (list != null) return LiveStream.fromJsonList(list);
     return [];
@@ -142,7 +184,11 @@ class ApiService {
     }
     final url = _playerApiUrl(serverUrl, username, password, query);
     final isBulk = categoryId == null || categoryId.isEmpty;
-    final data = await _getJson(url, timeout: isBulk ? _bulkTimeout : null);
+    final data = await _getJson(
+      url,
+      timeout: isBulk ? _bulkTimeout : null,
+      retries: isBulk ? 2 : 0,
+    );
     final list = _extractList(data, ['streams', 'movies', 'vod_streams', 'movie_list']);
     if (list != null) return VodItem.fromJsonList(list);
     return [];
@@ -173,7 +219,11 @@ class ApiService {
     }
     final url = _playerApiUrl(serverUrl, username, password, query);
     final isBulk = categoryId == null || categoryId.isEmpty;
-    final data = await _getJson(url, timeout: isBulk ? _bulkTimeout : null);
+    final data = await _getJson(
+      url,
+      timeout: isBulk ? _bulkTimeout : null,
+      retries: isBulk ? 2 : 0,
+    );
     final list = _extractList(data, ['series', 'series_list']);
     if (list != null) return SeriesItem.fromJsonList(list);
     return [];

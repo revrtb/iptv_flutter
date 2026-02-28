@@ -31,22 +31,35 @@ class VodTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const size = 48.0;
+    const radius = 10.0;
     return ListTile(
       leading: _logoUrl.isEmpty
-          ? CircleAvatar(
-              child: Icon(Icons.movie, color: Theme.of(context).colorScheme.onPrimary),
+          ? Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(radius),
+              ),
+              child: Icon(Icons.movie, color: theme.colorScheme.primary),
             )
-          : CircleAvatar(
-              child: ClipOval(
-                child: Image.network(
-                  _logoUrl,
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(
-                    Icons.movie,
-                    color: Theme.of(context).colorScheme.onPrimary,
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              child: Image.network(
+                _logoUrl,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(radius),
                   ),
+                  child: Icon(Icons.movie, color: theme.colorScheme.primary),
                 ),
               ),
             ),
